@@ -4,7 +4,9 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ParameterContext;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.aggregator.AggregateWith;
 import org.junit.jupiter.params.aggregator.ArgumentsAccessor;
@@ -23,28 +25,52 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Assumptions.assumingThat;
 
-@DisplayNameGeneration(DisplayNameGenerator.ReplaceUnderscores.class)
+@ExtendWith(FindSlowTestExtension.class)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class StudyTest {
 
+    private int value = 1;
+
+    @RegisterExtension
+    static FindSlowTestExtension findSlowTestExtension =
+            new FindSlowTestExtension(1000L);
 
 
+    @Test
+    void onePlus1() throws InterruptedException {
+        System.out.println(value++);
+        Thread.sleep(1100L);
+    }
+
+
+    @Test
+    void onePlus2() {
+        System.out.println(value++);
+    }
+
+
+    @Test
+    @SlowTest
+    void onePlus3() throws InterruptedException {
+        System.out.println(value++);
+        Thread.sleep(1100L);
+    }
+
+
+    @Order(2)
     @Test
     @DisplayName("스터디 만들기")
     void create_new_study() {
 
         String test_env = System.getenv("TEST_ENV");
-        assumeTrue("LOCAL".equalsIgnoreCase(test_env));
-
         assumingThat("LOCAL".equalsIgnoreCase(test_env), () -> {
             System.out.println("test 시작");
 
         });
-
-
         assertTimeout(Duration.ofSeconds(10), () -> new Study(10));
-
     }
 
+    @Order(1)
     @DisplayName("반복 테스트 ")
     @RepeatedTest(value = 10, name = "{displayName}, ! {currentRepetition} / {totalRepetitions}")
     void repeatTest(RepetitionInfo repetitionInfo) {
@@ -60,6 +86,7 @@ class StudyTest {
         System.out.println(message);
     }
 
+    @Order(0)
     @DisplayName("컨버터 테스트")
     @ParameterizedTest(name = "{index} {displayName} message = {0}")
     @CsvSource({"10, '자바 스터디'", "20, 스프링"})
@@ -127,7 +154,7 @@ class StudyTest {
 
     @Test
     @DisplayName("테스트3")
-    @DisabledOnOs({OS.MAC, OS.WINDOWS})
+    @DisabledOnOs({OS.MAC})
     void test2_mac() {
         System.out.println("테스트 3");
     }
