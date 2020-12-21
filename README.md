@@ -359,15 +359,167 @@ JUnit은 테스트 메소드 마다 테스트 인스턴스를 새로 만든다.
 - 이것이 기본 전략.
 - 테스트 메소드를 독립적으로 실행하여 예상치 못한 부작용을 방지하기 위함이다.
 - 이 전략을 JUnit 5에서 변경할 수 있다.
+  * 즉 테스트마다 `필드`를 공유하지 않는다.
+  * 테스트 메서드마다 System.out.println(this) 를 찍어보면 인스턴스가 다르단 걸 알 수 있다. 
+
+#### `@TestInstance(Lifecycle.PER_CLASS)`
+
+- 테스트 클래스당 인스턴스를 하나만 만들어 사용한다. -> 하나의 인스턴스를 공유한다
+- 경우에 따라, 테스트 간에 공유하는 모든 상태를 @BeforeEach 또는 @AfterEach에서
+초기화 할 필요가 있다.
+- @BeforeAll과 @AfterAll을 인스턴스 메소드 또는 인터페이스에 정의한 default 메소드로
+정의할 수도 있다.
+   * 이걸 사용하면 static 키워드가 필요한 메소드에서 static이 필요 없게 된다.  
 
 ### JUnit 5 테스트 순서
+
+* 제대로 된 단위 테스트라면, 다른 테스트와 동시에 실행되더라도 다른 테스트 코드에 영향을 주지 않는다. 
+  * 서로간에 의존성이 없어야 한다. (다른 코드에 영향 x)
+  * 그래서 순서가 상관이 없어야 한다. 
+ 
+
+실행할 테스트 메소드 특정한 순서에 의해 실행되지만  
+어떻게 그 순서를 정하는지는 분명히 하지 않는다.  
+(테스트 인스턴스를 테스트 마다 새로 만드는 것과 같은 이유)
+
+경우에 따라, 특정 `순서대로` 테스트를 실행하고 싶을 때도 있다.   
+그 경우에는 테스트 메소드를 원하는 순서에 따라 실행하도록   
+@TestInstance(Lifecycle.PER_CLASS)와 함께
+@TestMethodOrder를 사용할 수 있다. (`테스트 메서드의 실행 순서를 정하는것`)
+- MethodOrderer 구현체를 설정한다.
+- 기본 구현체
+- Alphanumeric
+- OrderAnnoation
+- Random
+```java
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class) // <<<!!
+class StudyTest {...
+
+  @Order(2)
+  @Test
+  void test2() {}
+
+  @Order(3)
+  @Test
+  void test3() {}
+
+  @Order(1)
+  @Test
+  void test1() {}
+}
+```
+
+1 -> 2 -> 3 순서로 실행되고 
+
+* 낮은 값이 높은 우선순위를 갖는다. 
+* 값이(순위) 같으면 둘중 아무거나 먼저 실행되는거 같다? 
 
 
 ### JUnit 5 junit-platform.properties
 
+JUnit 설정 파일로, 클래스패스 루트 (src/test/resources/)에 넣어두면 적용된다. 
+* src/test/resources/junit-platform.properties 
+
+모든 테스트에 공용으로 사용하고 싶을 때 설정한다. 
+
+
+* 테스트 인스턴스 라이프사이클 설정
+  -> junit.jupiter.testinstance.lifecycle.default = per_class
+
+* 확장팩 자동 감지 기능
+  -> junit.jupiter.extensions.autodetection.enabled = true
+
+
+* @Disabled 무시하고 실행하기 (풀 패키지 경로)
+  -> junit.jupiter.conditions.deactivate = org.junit.*DisabledCondition
+
+* 테스트 이름 표기 전략 설정
+  -> junit.jupiter.displayname.generator.default = \
+        org.junit.jupiter.api.DisplayNameGenerator$ReplaceUnderscores
+    * 언더스코어를 공백으로 바꿔주는것 
+
 
 ### JUnit 5 확장 모델
 
+JUnit 4의 확장 모델은 @RunWith(Runner), TestRule, MethodRule.
+JUnit 5의 확장 모델은 단 하나로 통합 JUnit4 에서 쓰던걸 5에서 못쓴다.
+ `Extension.`
+
+
+
+확장팩 등록 방법
+  * 선언적인 등록 @ExtendWith(클래스.class)
+  * 프로그래밍 등록 @RegisterExtension
+  * 자동 등록 자바 ​ServiceLoader​ 이용
+
+확장팩 만드는 방법
+  * 테스트 실행 조건
+  * 테스트 인스턴스 팩토리
+  * 테스트 인스턴스 후-처리기
+  * 테스트 매개변수 리졸버
+  * 테스트 라이프사이클 콜백
+  * 예외 처리
+  * ...
+
+참고
+  * https://junit.org/junit5/docs/current/user-guide/#extensions
+
+
+확장팩 예제 
+```java 
+
+public class FindSlowTestExtension implements BeforeTestExecutionCallback, AfterTestExecutionCallback {
+
+    private static final long THRESHOLD = 1000L;
+
+    @Override
+    public void beforeTestExecution(ExtensionContext extensionContext) throws Exception {
+        ExtensionContext.Store store = getStore(extensionContext);
+        store.put("START_TIME", System.currentTimeMillis());
+    }
+    
+    @Override
+    public void afterTestExecution(ExtensionContext extensionContext) throws Exception {
+        Method requiredTestMethod = extensionContext.getRequiredTestMethod();
+        SlowTest annotation = requiredTestMethod.getAnnotation(SlowTest.class);
+
+        String testMethodName = requiredTestMethod.getName();
+        ExtensionContext.Store store = getStore(extensionContext);
+
+        long start_time = store.remove("START_TIME", long.class);
+        long duration = System.currentTimeMillis() - start_time;
+        if (duration > THRESHOLD && annotation == null) {
+            System.out.printf("Please consider mark method [%s] with @SlowTest.\n", testMethodName);
+        }
+
+    }
+    
+    private ExtensionContext.Store getStore(ExtensionContext extensionContext) {
+        String testClassName = extensionContext.getRequiredTestClass().getName();
+        String testMethodName = extensionContext.getRequiredTestMethod().getName();
+
+        return extensionContext.getStore(ExtensionContext.Namespace.create(testClassName, testMethodName));
+    }
+}
+```
+실행하는데 1초 이상 걸리는 메서드들이 @SlowTest 라는 어노테이션이 붙어있지 않으면
+어노테이션을 붙여줘야 한다는 메시지를 찍어주는 확장 클래스 
+
+* 코딩해서 생성자로 직접 시간을 넘겨주고 싶다면?
+* @RegisterExtension 어노테이션을 이용해서 `static` 필드로 선언
+  ```java
+    class StudyTest {
+    @RegisterExtension
+    static FindSlowTestExtension findSlowTestExtension = 
+            new FindSlowTestExtension(1000L);
+    ...
+    }
+  ``` 
+
+* 자동으로 등록을 하고싶다면?
+  * 테스트 설정파일(properties)에 
+    * `junit.jupiter.extensions.autodetection.enabled = true` 옵션 설정  
+  * `이 옵션보다 @RegisterExtension 어노테이션으로 명시적으로 설정해주는 것이 좋다.`
 
 ### JUnit 5 마이그레이션
 
