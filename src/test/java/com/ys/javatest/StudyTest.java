@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assumptions.assumingThat;
 
 @ExtendWith(FindSlowTestExtension.class)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class StudyTest {
 
     private int value = 1;
