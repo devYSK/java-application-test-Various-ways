@@ -648,29 +648,323 @@ public @interface FastTest {
 
 ## 섹션 1. Mockito
 
-
 ### Mockito 소개
+Mock: 진짜 객체와 비슷하게 동작하지만 그동작을 직접 그 객체의 행동을 관리하는 객체.
+
+Mockito​: Mock 객체를 쉽게 만들고 관리하고 검증할 수 있는 방법을 제공한다.
+테스트를 작성하는 자바 개발자 50%+ 사용하는 Mock 프레임워크.
+- https://www.jetbrains.com/lp/devecosystem-2019/java/
+현재 최신 버전 3.1.0 - 2019기준
+
+단위 테스트에 고찰
+- 참조 : https://martinfowler.com/bliki/UnitTest.html
 
 
 ### Mockito 시작하기
 
+라이브러리 : 
+* org.mockto:mockto-core  
+* org.mokito:mockto-junit-jupiter
+
+의존성 직접 추가 ( 스프링부트 사용하지 않을 시)
+```
+<dependency>
+    <groupId>org.mockito</groupId>
+    <artifactId>mockito-core</artifactId>
+    <version>3.1.0</version>
+    <scope>test</scope>
+</dependency>
+<dependency>
+    <groupId>org.mockito</groupId>
+    <artifactId>mockito-junit-jupiter</artifactId>
+    <version>3.1.0</version>
+    <scope>test</scope>
+</dependency
+```
+
+다음 세 가지만 알면 Mock을 활용한 테스트를 쉽게 작성할 수 있다.
+- Mock을 `만드는` 방법
+- Mock이 어떻게 `동작`해야 하는지 관리하는 방법
+- Mock의 행동을 `검증`하는 방법
+
+Mockito 레퍼런스
+- https://javadoc.io/doc/org.mockito/mockito-core/latest/org/mockito/Mockito.html
 
 ### Mock 객체 만들기
 
+Mockito.mock() 메소드로 만드는 방법
+* mock을 쓰기에 아주 적절한 경우
+  * 구현체는 없지만 interface만 알고있어서 interface를 이용해서 코드를 작성하는 경우. 
+
+#### 구현체는 없고 구현하지 않아도 가짜로 객체를 만드는법 2가지
+- Mockito.mock()
+- @Mock 어노테이션
+
+* `Mockito.mock()` 메서드로 mock 객체를 만드는법
+  ```java
+  MemberService memberService = Mockito.mock(MemberService.class);
+  StudyRepository studyRepository = Mockito.mock(StudyRepository.class);
+  ```   
+  * MemberSerivce와 StudyRepository는 `구현체가 없는 interface`이다.
+  * 구현체가 없고 구현하지 않았음에도 불구하고 mock으로 만들어준다.  
+
+<br>
+
+* @Mock 애노테이션으로 만드는 방법 
+  - 반드시 @ExtendWith 어노테이션이 있어야 작동!
+  - JUnit 5 extension으로 MockitoExtension을 사용해야 한다.( 클래스 선언 위에)
+  - 필드와 메서드 매개변수로 만들 수 있다
+  --- 
+  - 필드로 만들기
+  ```java
+  @ExtendWith(MockitoExtension.class)
+  class StudyServiceTest {
+
+    @Mock MemberService memberService;
+    @Mock StudyRepository studyRepository;
+    ...
+  }
+  ```
+
+  - 메서드 매개변수로 만들기 
+  ```java
+  @ExtendWith(MockitoExtension.class)
+  class StudyServiceTest {
+      @Test
+      void createStudyService(@Mock MemberService memberService,
+                              @Mock StudyRepository studyRepository) {
+          StudyService studyService = new StudyService(memberService,
+                                                       studyRepository);
+            assertNotNull(studyService);
+        }
+  ```
+
 
 ### Mock 객체 Stubbing
+stub이란 토막,꽁초,남은부분,몽당연필.. 이라는 뜻으로
+dummy객체가 마치 실제로 동작하는 것 처럼 보이도록 만들어놓은 것
+- 즉 Mock 객체의 행동을 조작하는 것
 
+모든 Mock 객체의 행동
+- Null을 리턴한다. (Optional 타입은 Optional.empty 리턴. 즉 비어있는 옵셔널 객체)
+- Primitive 타입은 기본 Primitive 값.
+- 콜렉션은 비어있는 콜렉션.
+- Void 메소드는 예외를 던지지 않고 아무런 일도 발생하지 않는다.
+
+* 예제1
+
+* memberService.findById(1L)  member 객체를 나오게 할라면 
+  다음과 같이 쓰면 된다.  
+  ```java
+   @Test
+    void createNewStudy(@Mock MemberService memberService,
+                            @Mock StudyRepository studyRepository) {
+
+        Member member = new Member();
+        member.setId(1L);
+        member.setEmail("youngsoo@naver.com");
+
+        Optional<Member> byId = memberService.findById(1L);
+        when(memberService.findById(1L))
+                .thenReturn(Optional.of(member));
+        Study study = new Study(10, "java");
+
+        Optional<Member> findById = memberService.findById(1L);
+        assertEquals("youngsoo@naver.com", findById.get().getEmail());
+
+    }
+  ```
+  * 만약 2L, 3L 등 다른 member 객체를 나오게 한다면 오류가 난다.
+    * 1L로만 member를 나오게 했기 때문  
+  * 즉 when().thenReturn은 mock 객체를 직접 핸들링한다 
+  * org.mockito.ArgumentMatchers.`any()`; 메서드를 사용하면   
+    항상 같은 객체가 나온다 (아무 값이나 상관 없다). 
+
+
+* 예외를 던지는 doThrow() org.mockito.Mockito.doThrow;
+  * ```java
+    doThrow(new IllegalArgumentException())
+            .when(memberService).validate();
+        
+    assertThrows(IllegalArgumentException.class, () -> {
+        memberService.validate();
+        });
+    ```
+
+* 순서대로 호출하기
+* ``` java
+  when(memberService.findById(any()))
+                .thenReturn(Optional.of(member))
+                .thenThrow(new RuntimeException())
+                .thenReturn(Optional.empty());
+  ```
+  * 첫번째 호출 멤버
+  * 두번째 호출 런타임 익셉션
+  * 세번째 호출 빈 옵셔널 객체를 내보낸다  
 
 ### Mock 객체 Stubbing 연습 문제
+다음 코드의 // TODO에 해당하는 작업을 코딩으로 채워 넣으세요.
+```java
+Study study = new Study(10, "테스트");
+// TODO memberService 객체에 findById 메소드를 1L 값으로 호출하면
+// Optional.of(member) 객체를 리턴하도록 Stubbing
+// TODO studyRepository 객체에 save 메소드를 study 객체로 호출하면 study 객체
+// 그대로 리턴하도록 Stubbing
+studyService.createNewStudy(1L, study);
+assertNotNull(study.getOwner());
+assertEquals(member, study.getOwner());
+```
 
+* 답
+```java
+when(memberService.findById(1L)).thenReturn(Optional.of(member));
+
+when(studyRepository.save(study)).thenReturn(study);
+```
 
 ### Mock 객체 확인
+
+Mock 객체가 어떻게 사용이 됐는지 확인할 수 있다.
+* 특정 메소드가 특정 매개변수로 몇번 호출 되었는지, 
+* 최소 한번은 호출 됐는지, 
+* 전혀 호출되지 않았는지
+  * Verifying exact number of invocations
+  * `org.mockito.Mockito.verify()` 메서드
+  * 예제 : 멤버 서비스에서 딱 1번 notify란 메서드가 study라는 매개변수를 가지고 호출 되어야 한다 
+  * ```java
+    verify(memberService, times(1)).notify(study);
+    ```
+  * any()도 가능하다.
+
+<br>
+
+* 어떤 순서대로 호출했는지
+  * Verification in order
+  * `org.mockito.Mockito.inOrder()`, `inOrder.verify()` 메서드
+  * 예제 : 멤버 서비스에서 notify(study) 메소드가 notify(member) 보다 먼저 호출되어야 한다.
+  * ```java
+    verify(memberService, times(1)).notify(study);
+    verify(memberService, times(1)).notify(member);
+    
+    InOrder inOrder = inOrder(memberService)
+    inOrder.verify(memberService).notify(study);
+    inOrder.verify(memberService).notify(member);
+    ```
+  * 이후에 더이상 아무 액션이 일어나면 안된다 할 때는
+  * `verifyNoMoreInteractions(Object mocks...)` 메서드
+<br>
+
+* 특정 시간 이내에 호출됐는지
+  * Verification with timeout
+
+* 특정 시점 이후에 아무 일도 벌어지지 않았는지
+  * Finding redundant invocations
 
 
 ### BDD 스타일 Mockito API
 
+BDD​:​애플리케이션이 어떻게 “행동”해야하는지​에 대한 공통된 이해를 구성하는 방법으로, 
+TDD에서 창안했다.
+
+* BDD : Behaviour-Driven Development의 약자
+* TDD :  Test-Driven Development의 약자
+
+BDD는 시나리오를 기반으로 테스트 케이스를 작성하며 함수 단위 테스트를 권장하지 않는다. 
+이 시나리오는 개발자가 아닌 사람이 봐도 이해할 수 있을 정도의 레벨을 권장한다. 
+하나의 시나리오는 Given, When, Then 구조를 가지는 것을 기본 패턴으로 권장하며 각 절의 의미는 다음과 같다.
+> Feature : 테스트에 대상의 기능/책임을 명시한다.
+> Scenario : 테스트 목적에 대한 상황을 설명한다.
+> Given : 시나리오 진행에 필요한 값을 설정한다.
+> When : 시나리오를 진행하는데 필요한 조건을 명시한다.
+> Then : 시나리오를 완료했을 때 보장해야 하는 결과를 명시한다.
+
+> 테스트 대상은 A 상태에서 출발하며(Given) 
+> 어떤 상태 변화를 가했을 때(When) 
+> 기대하는 상태로 완료되어야 한다. (Then)
+> 또는 Side Effect가 전혀 없는 테스트 대상이라면 테스트 대상의 환경을 A 상태에 두고(Given) 
+> 어떤 행동을 요구했을 때(When)
+>  기대하는 결과를 돌려받아야 한다. (Then)
+
+행동에대한스팩
+* Title
+* Narrative
+  * As a / I want / so that
+* Acceptance criteria
+  * Given / When / Then
+
+#### Mockito는 `BddMockito`라는 클래스를 통해 BDD스타일의 API를제공한다.
+
+
+
+#### Given
+* org.mockito.BDDMockito.given() 메서드
+  * 위에서 사용했던 when을 다음과 같이 바꿀 수 있다. when -> given
+  * ```java
+    when(memberService.findById(1L))
+            .thenReturn(Optional.of(member));
+    when(studyRepository.save(study))
+            .thenReturn(study)
+    //
+    given(memberService.findById(1L))
+            .willReturn(Optional.of(member));
+    given((studyRepository.save(study)))
+            .willReturn(study);
+    ```
+
+#### Then
+* org.mockito.BDDMockito.then() 메서드
+  * 위에서 사용했던 verify를 다음과 같이 바꿀 수 있따. verify -> then
+  * ```java
+    verify(memberService, times(1)).notify(study);
+    verifyNoMoreInteractions()
+    
+    then(memberService).should(times(1)).notify(study);
+    then(memberService).shouldHaveNoMoreInteractions();
+   ```
+
+
+참고
+* https://javadoc.io/static/org.mockito/mockito-core/3.2.0/org/mockito/BDDMockito.html
+* https://javadoc.io/doc/org.mockito/mockito-core/latest/org/mockito/Mockito.html#BDD_behavior_verification
+
 
 ### Mockito 연습 문제
+다음 StudyService 코드에 대한 테스트를 Mockito를 사용해서 Mock 객체를 만들고
+ Stubbing과 Verifying을 사용해서 테스트를 작성하세요.
+
+StudyService.java
+```java
+public Study openStudy(Study study) {
+    study.open();
+    Study openedStudy = repository.save(study);
+    memberService.notify(openedStudy);
+    return openedStudy;
+}
+```
+StudyServiceTest.java
+```java
+@DisplayName("다른 사용자가 볼 수 있도록 스터디를 공개한다.")
+    @Test
+    void openStudy() {
+        // Given
+        StudyService studyService = new StudyService(memberService,
+                studyRepository);
+        Study study = new Study(10, "더 자바, 테스트");
+​        // TODO studyRepository Mock 객체의 save 메소드를호출 시 study를 리턴하도록 만들기.
+        given(studyRepository.save(study)).willReturn(study);
+
+        // When
+        studyService.openStudy(study);
+        
+        // Then
+        ​// TODO study의 status가 OPENED로 변경됐는지 확인
+        assertEquals(StudyStatus.OPENED, study.getStatus());
+        // TODO study의 openedDataTime이 null이 아닌지 확인
+        assertNotNull(study.getOpenedDateTime());
+        // TODO memberService의 notify(study)가 호출 됐는지 확인.
+        then(memberService).should().notify(study);
+    }
+```
 
 
 ## 섹션 2. 도커와 테스트
