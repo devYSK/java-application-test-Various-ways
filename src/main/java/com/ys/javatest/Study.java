@@ -1,6 +1,6 @@
 package com.ys.javatest;
 
-import lombok.AllArgsConstructor;
+import com.ys.javatest.domain.StudyStatus;
 import lombok.Getter;
 
 //@SpringBootApplication
